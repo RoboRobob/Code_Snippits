@@ -1,6 +1,9 @@
 """
 Description:
-
+this program uses a hardcoded variable for the cyptertext.
+it will re-code the text each time a positive integer (N) is used.
+after offsetting each letter by N it will print out the final result
+in the terminal.
 """
 
 if __name__ == "__main__":
