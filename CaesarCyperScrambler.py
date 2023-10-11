@@ -30,7 +30,6 @@ if __name__ == "__main__":
                 if(alphabet.find(cyphertext[i]) != -1):
                     output += alphabet[(alphabet.find(cyphertext[i])+N)%len(alphabet)]
                 else:
-                    output += " "
-
+                    output += cyphertext[i]
             print(output)
     print("Exiting...")
