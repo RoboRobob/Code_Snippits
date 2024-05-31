@@ -9,6 +9,15 @@
 # requires curl, jq, and md5sum.
 ##
 
+# VirusTotal API key
+api_key="" # Place your API Key Here.
+
+# Check if the API key is set
+if [[ -z "$api_key" ]]; then
+    echo "Error: VirusTotal API key is not set. Please set the api_key variable in the script."
+    exit 1
+fi
+
 # Create a temporary file to store process information
 TMP_FILE=$(mktemp)
 
@@ -24,7 +33,6 @@ get_md5() {
 # Function to query VirusTotal with an MD5 hash
 query_virustotal() {
     local hash=$1
-    local api_key="PUT_API_KEY_HERE" # This is where your API key goes for Virustotal.
 
     response=$(curl -s -X GET "https://www.virustotal.com/api/v3/files/$hash" \
       -H "x-apikey: $api_key")
@@ -36,7 +44,7 @@ query_virustotal() {
         if [[ "$positives" -gt 0 ]]; then
             echo "$positives/$total engines detected malware"
         else
-            echo "No Detections."
+            echo "No malware detected"
         fi
     else
         echo "No results found on VirusTotal"
@@ -84,7 +92,7 @@ while read -r pid cmd; do
             # Increment the counter and check the rate limit
             ((count++))
             if ((count % 4 == 0)); then
-                sleep 60  # Wait for 1 minute to respect the rate limit (change this to make it run faster if you have a higher rate.)
+                sleep 120  # Wait for 2 minutes to respect the rate limit
             fi
         fi
 
@@ -92,6 +100,9 @@ while read -r pid cmd; do
         echo "PID: $pid, Path: $exec_path, MD5: $md5, VT Result: $vt_result"
     fi
 done < $TMP_FILE
+
+# Clean up
+rm $TMP_FILE
 
 # Clean up
 rm $TMP_FILE
