@@ -1,0 +1,98 @@
+#!/bin/bash
+
+##
+# This script submits the md5 sums of all running processes to virustotal.
+# it will save all results to a file for reference when ran, 
+# and resume from that file every run, so the same has is never checked twice.
+# it is rate limited to the free tier of the virustotal api, so is very slow.
+#
+# requires curl, jq, and md5sum.
+##
+
+# Create a temporary file to store process information
+TMP_FILE=$(mktemp)
+
+# List all processes with their executable paths
+ps -e -o pid,cmd > $TMP_FILE
+
+# Function to get the MD5 hash of a file
+get_md5() {
+    local file=$1
+    md5sum "$file" | awk '{ print $1 }'
+}
+
+# Function to query VirusTotal with an MD5 hash
+query_virustotal() {
+    local hash=$1
+    local api_key="PUT_API_KEY_HERE" # This is where your API key goes for Virustotal.
+
+    response=$(curl -s -X GET "https://www.virustotal.com/api/v3/files/$hash" \
+      -H "x-apikey: $api_key")
+
+    if [[ $(echo "$response" | jq -r '.error') == "null" ]]; then
+        positives=$(echo "$response" | jq -r '.data.attributes.last_analysis_stats.malicious')
+        total=$(echo "$response" | jq -r '.data.attributes.last_analysis_stats.total')
+
+        if [[ "$positives" -gt 0 ]]; then
+            echo "$positives/$total engines detected malware"
+        else
+            echo "No Detections."
+        fi
+    else
+        echo "No results found on VirusTotal"
+    fi
+}
+
+# Load previous results if they exist
+RESULT_FILE="vt_results.txt"
+declare -A results
+if [[ -f $RESULT_FILE ]]; then
+    while IFS= read -r line; do
+        hash=$(echo $line | cut -d' ' -f1)
+        result=$(echo $line | cut -d' ' -f2-)
+        results["$hash"]="$result"
+    done < $RESULT_FILE
+fi
+
+# Read through the temporary file and process each executable
+count=0
+while read -r pid cmd; do
+    # Skip the header line
+    if [[ "$pid" == "PID" ]]; then
+        continue
+    fi
+
+    # Get the executable path
+    exec_path=$(echo $cmd | awk '{ print $1 }')
+
+    # Check if the executable path exists
+    if [[ -f "$exec_path" ]]; then
+        # Get the MD5 hash of the executable
+        md5=$(get_md5 "$exec_path")
+
+        # Check if we already have a result for this hash
+        if [[ -n "${results[$md5]}" ]]; then
+            vt_result=${results[$md5]}
+        else
+            # Query VirusTotal with the MD5 hash
+            vt_result=$(query_virustotal "$md5")
+
+            # Save the result in a concise format
+            echo "$md5 $vt_result" >> $RESULT_FILE
+            results["$md5"]="$vt_result"
+
+            # Increment the counter and check the rate limit
+            ((count++))
+            if ((count % 4 == 0)); then
+                sleep 60  # Wait for 1 minute to respect the rate limit (change this to make it run faster if you have a higher rate.)
+            fi
+        fi
+
+        # Print the result in a single line
+        echo "PID: $pid, Path: $exec_path, MD5: $md5, VT Result: $vt_result"
+    fi
+done < $TMP_FILE
+
+# Clean up
+rm $TMP_FILE
+
