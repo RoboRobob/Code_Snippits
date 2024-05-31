@@ -47,7 +47,7 @@ query_virustotal() {
             echo "No malware detected"
         fi
     else
-        echo "No results found on VirusTotal"
+        echo "No results found on VirusTotal OR there was an error returned."
     fi
 }
 
